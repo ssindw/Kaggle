@@ -1,0 +1,243 @@
+---
+title: "Kaggle - Titanic"
+author: "Saurabh Sindwani"
+date: "23 May 2017"
+output: html_document
+---
+
+
+# Synopsis
+The goal is to predict titanic survivors from a dataset that features the passenger's class, name, sex, age, number of siblings/spouses aboard, number of parents/child aboard, ticket number, fare, and the embarking port. This report provides data exploration with exploratory visualizations, feature engineering and predictive modeling.
+
+# Data Exploration
+
+### Data Loading
+
+- Load Data and replace missing data with "NA"" values.
+```{r warning=FALSE, message = FALSE}
+# Load the training data set, add NA to missing(blank) values
+train <- read.csv("./data/train.csv", header=T, na.strings = c(""))
+test <- read.csv("./data/test.csv", header=T, na.strings = c(""))
+str(train)
+```
+
+### Survived 
+
+How many Survived?
+```{r warning=FALSE, message = FALSE}
+library(ggplot2)
+table(train$Survived)
+prop.table(table(train$Survived))
+ggplot(train, aes(Survived, fill="salmon")) + geom_bar()
+```
+
+Survival rate is 38% while those who did not make it is 62%.
+
+### Class 
+There are a few things money cannot buy like manners, morals, intelligence and CLASS. But, class could be bought on Titanic!
+```{r warning=FALSE, message = FALSE}
+train$Pclass <- as.factor(train$Pclass)
+table(train$Pclass)
+```
+Most people travelled 3rd class and as the chart depicts most of them did not make it. Clearly, disadvantage class 3.
+
+```{r warning=FALSE, message = FALSE}
+ggplot(train, aes(Pclass, ..count.., fill = factor(Survived))) + geom_bar(position="dodge")
+```
+
+### Name 
+
+What's in the name?
+Mostly, Mr., Mrs., Miss and Master and then a few interesting others.
+The survival rates differ by title, advantage Ladies and children! 
+
+```{r warning=FALSE, message = FALSE}
+library(stringr)
+Title <- as.factor(str_sub(train$Name, str_locate(train$Name, ",")[ , 1] + 2, str_locate(train$Name, "\\.")[ , 1] - 1))
+table(train$Sex,Title)
+ggplot(train, aes(Title, ..count.., fill = factor(Survived))) + geom_bar(position="dodge")
+
+NameLength <- nchar(as.character(train$Name))
+NameLenCat<-cut(NameLength, seq(12,82,5))
+table(train$Survived, NameLenCat)
+ggplot(train, aes(NameLenCat, ..count.., fill = factor(Survived))) + geom_bar(position="dodge")
+
+
+```
+
+Longer names help you survive!! Strange but true on titanic!
+
+### Sex
+
+Too many men when compared to women. Clearly, women first!
+```{r warning=FALSE, message = FALSE}
+ggplot(train, aes(Sex, ..count.., fill = factor(Survived))) + geom_bar(position="dodge")
+```
+
+### Age
+
+Too many missing values (177/891 = 20%), will need to impute.
+```{r warning=FALSE, message = FALSE}
+summary(train$Age)
+ggplot(train, aes(Age)) + geom_density(kernel="gaussian")
+table(train$Survived, is.na(train$Age))
+Age_Null <- is.na(train$Age)
+Agecat<-cut(train$Age, seq(0,85,8))
+ggplot(train, aes(Agecat, ..count.., fill = factor(Survived))) + geom_bar(position="dodge")
+```
+
+Passengers with age missing have a survival rate of 29% while others have a survival rate of 40%.
+Differing age categories have different survival rate, this will help the predictions.
+
+### Sibling or Spouse
+
+608 travelling alone, rest with family. Travelling Single proved to be disadvantageous; while 
+travalling with 1 is advantageous.
+```{r warning=FALSE, message = FALSE}
+table(train$SibSp)
+ggplot(train, aes(SibSp, ..count.., fill = factor(Survived))) + geom_bar(position="dodge")
+```
+
+### Parent or Child
+
+678 travelling alone, rest with family. Again, travelling Single proved to be disadvantageous; while 
+travalling with 1,2,3 is advantageous.
+```{r warning=FALSE, message = FALSE}
+table(train$Parch)
+ggplot(train, aes(Parch, ..count.., fill = factor(Survived))) + geom_bar(position="dodge")
+```
+
+### Ticket
+There are tickets with differing total number of digits and there are tickets that start with characters. 
+Does that encode some information? Some ticket types like those starting with 1, 2 and P  have higher
+chances of survival.
+```{r warning=FALSE, message = FALSE}
+TicketType <- substring(train$Ticket,1,1)
+TicketType2 <- nchar(as.character(train$Ticket))
+TicketType <- as.factor(TicketType)
+TicketType2 <- as.factor(TicketType2)
+ggplot(train, aes(TicketType, ..count.., fill = factor(Survived))) + geom_bar(position="dodge")
+ggplot(train, aes(TicketType2, ..count.., fill = factor(Survived))) + geom_bar(position="dodge")
+```
+
+### Fare
+There are 248 unique fares.
+As expected, 1st class is way more expensive.
+```{r warning=FALSE, message = FALSE}
+length(unique(train$Fare))
+aggregate(Fare ~ Pclass, train, mean)
+```
+
+### Cabin
+
+There are only 204 cabin values, out of 204 there are 148 unique values.
+There are 687 missing values.
+```{r warning=FALSE, message = FALSE}
+library(DT)
+sum(!is.na(train$Cabin))
+length(unique(train$Cabin))
+sum(is.na(train$Cabin))
+datatable(data.frame(summary(train$Cabin)))
+```
+
+Clearly, those with cabins have higher survival rates.
+```{r warning=FALSE, message = FALSE}
+CabinType <-  substring(train$Cabin,1,1)
+ggplot(train, aes(CabinType, ..count.., fill = factor(Survived))) + geom_bar(position="dodge")
+```
+
+### Embarked
+
+There are 3 departure locations, most people are from Southampton then Cherbourg and Queenstown.
+There are 2 missing values for embarking point which need to be imputed.
+Cherbourg has the highest survival rate as mostly class 1 boarded from there.
+
+```{r warning=FALSE, message = FALSE}
+table(train$Embarked)
+datatable(train[is.na(train$Embarked),])
+ggplot(train, aes(Embarked, ..count.., fill = factor(Survived))) + geom_bar(position="dodge")
+ggplot(train, aes(Embarked, ..count.., fill = factor(Pclass))) + geom_bar(position="dodge")
+```
+
+# Feature Engineering
+
+### Combining Data Sets
+
+```{r warning=FALSE, message = FALSE}
+Survived <- train$Survived 
+train$Survived <- NULL
+combi <- rbind(train,test)
+```
+
+### New Features
+Based on the insights gained from the data exploration above, we create new features.
+
+
+- Title: Extract title from the name 
+- NameLenCat: Formulate categories based on the length of the names
+- Family Size: Total of Siblings/Spouse and Parent/Child
+- Ticket Letter: First Letter of the ticket
+- Ticket Length: Length of the ticket number
+- Cabin Type : First letter of cabin, replace NA with "N"
+```{r warning=FALSE, message = FALSE}
+#Title
+combi$Title <- as.factor(str_sub(combi$Name, str_locate(combi$Name, ",")[ , 1] + 2, str_locate(combi$Name, "\\.")[ , 1] - 1))
+
+#Name Length Category
+c_NameLength <- nchar(as.character(combi$Name))
+combi$NameLenCat<-cut(c_NameLength, seq(11,86,5))
+
+#Family Size
+combi$FamilySize<- combi$SibSp + combi$Parch + 1
+
+#Ticket First Letter
+combi$TicketLett <- as.factor(substring(combi$Ticket,1,1))
+#Ticket Length
+combi$TicketLen <- as.factor(nchar(as.character(combi$Ticket)))
+
+#CabinType
+combi$CabinType <-  substring(combi$Cabin,1,1)
+combi$CabinType[is.na(combi$CabinType)] <- "N"
+combi$CabinType <- as.factor(combi$CabinType)
+
+
+```
+
+### Impute missing values
+
+- Embarked: Replace 2 missing values with "S"" which is most occuring value by a big margin.
+- Fare: Replace 1 missing value with the mean on certain conditions.
+- Age: There are too many missing values, impute Using rpart.
+```{r warning=FALSE, message = FALSE}
+combi$Embarked[is.na(combi$Embarked)] <- "S"
+combi$Fare[is.na(combi$Fare)] <-mean(combi[combi$Pclass == 3 & combi$Embarked == "S" & combi$TicketLen==4 &
+                                                   combi$CabinType == "N", "Fare"], na.rm = TRUE)
+
+library(rpart)
+Agefit <- rpart(Age ~ Pclass + Sex + SibSp + Parch + Fare + Embarked + Title + NameLenCat +FamilySize +
+                        TicketLett+TicketLen+CabinType, data=combi[!is.na(combi$Age),], method="anova")
+combi$Age[is.na(combi$Age)] <- predict(Agefit, combi[is.na(combi$Age),])
+
+```
+
+Seperate the data into train and test sets
+```{r warning=FALSE, message = FALSE}
+train <- cbind(Survived, combi[1:nrow(train),c(2,4,5,6,7,9,11,12,13,14,15,16,17)])
+test <- combi[(nrow(train)+1):nrow(combi),c(2,4,5,6,7,9,11,12,13,14,15,16,17)]
+```
+
+# Build Random Forest Ensemble
+```{r warning=FALSE, message = FALSE}
+library(randomForest)
+set.seed(777)
+fit <- randomForest(as.factor(Survived) ~  Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Title + NameLenCat +FamilySize
+                    + TicketLett + TicketLen + CabinType, data=train, importance=TRUE, ntree=2000)
+# Look at variable importance
+varImpPlot(fit)
+# Now let's make a prediction and write a submission file
+Prediction <- predict(fit, test)
+submit <- data.frame(PassengerId = c(892:1309), Survived = Prediction)
+write.csv(submit, file = "randomforest.csv", row.names = FALSE)
+```
+
+A few other tweaks in the features and models took me to 0.81340 - top 5% at the time of writing this!
